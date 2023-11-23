@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="94782517-6ff0-4133-b5e8-92fbe366dcca" name="Changes" comment="Initial commit" />
+    <list default="true" id="94782517-6ff0-4133-b5e8-92fbe366dcca" name="Changes" comment="Initial commit">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -21,6 +23,20 @@
   <component name="Git.Settings">
     <option name="PUSH_AUTO_UPDATE" value="true" />
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "sproul21"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings">
+    <option name="selectedUrlAndAccountId">
+      <UrlAndAccount>
+        <option name="accountId" value="bf83f896-218f-4354-bbdf-1032e88e70d7" />
+        <option name="url" value="https://github.com/sproul21/TowerDefenseSproul.git" />
+      </UrlAndAccount>
+    </option>
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
@@ -59,7 +75,16 @@
       <recent name="$PROJECT_DIR$/../" />
     </key>
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Go Build.go build TowerDefense.go (1)">
+    <configuration name="go build TowerDefense.go (1)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="TowerDefenseSproul" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <package value="TowerDefenseSproul" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/TowerDefense.go" />
+      <method v="2" />
+    </configuration>
     <configuration name="go build TowerDefense.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="TowerDefenseSproul" />
       <working_directory value="$PROJECT_DIR$" />
@@ -71,6 +96,7 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build TowerDefense.go (1)" />
         <item itemvalue="Go Build.go build TowerDefense.go" />
       </list>
     </recent_temporary>
