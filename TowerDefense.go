@@ -14,7 +14,9 @@ import (
 	"golang.org/x/image/font/opentype"
 	"image"
 	"image/color"
+	"io/fs"
 	"log"
+	"math"
 	"path"
 	"strings"
 	"time"
@@ -26,7 +28,8 @@ var embeddedFiles embed.FS
 type TowerType int
 
 const (
-	ArcherTower TowerType = iota
+	None TowerType = iota - 1
+	ArcherTower
 	MagicTower
 	StoneTower
 	IceTower
@@ -39,6 +42,8 @@ type Tower struct {
 	Range    float64
 	Damage   float64
 	Health   int
+	Cost     int
+	Freeze   float64
 	Position image.Point
 	Images   [3]*ebiten.Image // Images for each level
 }
@@ -54,7 +59,7 @@ type TowerDefenseGame struct {
 	TowerDefenseMap     []string
 	Player              Player
 	Towers              []Tower
-	enemies             Enemy
+	enemies             []Enemy
 	pathMap             *paths.Grid
 	path                *paths.Path
 	archerTowerImages   [3]*ebiten.Image
@@ -67,13 +72,31 @@ type TowerDefenseGame struct {
 	TowerManagementOpen bool
 	TowerToPlace        TowerType
 	lastUpdateTime      time.Time
+	currentWave         int
+	waveEnemies         []Enemy
+	waveEnemyIndex      int
+	waveInProgress      bool
+	lastEnemySpawnTime  float64
+	waveEndTime         float64
 }
 
+type EnemyType int
+
+const (
+	Goblin EnemyType = iota
+	Knight
+	Wizard
+	Berserker
+)
+
 type Enemy struct {
+	Type        EnemyType
 	pict        *ebiten.Image
 	xloc        float64
 	yloc        float64
 	Strength    int
+	Currency    int
+	Health      int
 	attackTimer float64
 }
 
@@ -85,10 +108,62 @@ func (game *TowerDefenseGame) Update() error {
 	game.checkMouse()
 
 	// Update enemy position
-	if game.enemies.yloc > float64(60) {
-		game.enemies.yloc -= 1 // Adjust this value to control the speed of the enemy
-	} else {
-		game.EnemyAttack(deltaTime)
+	for i := range game.enemies {
+		fmt.Println("Updating enemy position:", game.enemies[i].xloc, game.enemies[i].yloc)
+		if game.enemies[i].yloc > float64(60) {
+			game.enemies[i].yloc -= .5 // Adjust this value to control the speed of the enemy
+		} else {
+			game.EnemyAttack(deltaTime, &game.enemies[i])
+		}
+	}
+
+	if game.waveInProgress {
+		fmt.Println("Wave in progress, enemy index:", game.waveEnemyIndex, "of", len(game.waveEnemies))
+		if game.waveEnemyIndex < len(game.waveEnemies) {
+			fmt.Println("Wave in progress:", game.waveInProgress)
+
+			// Check if it's time to spawn the next enemy
+			if game.lastEnemySpawnTime >= 4 { // 1 second interval
+				game.enemies = append(game.enemies, game.waveEnemies[game.waveEnemyIndex])
+				game.waveEnemyIndex++
+				game.lastEnemySpawnTime = 0 // Reset the spawn timer
+			} else {
+				game.lastEnemySpawnTime += deltaTime
+			}
+		} else {
+			// All enemies in the wave have been spawned
+			if game.waveEndTime >= 15 { // 10 seconds after the wave ends
+				// Start the next wave
+				game.startWave(game.currentWave + 1)
+				game.waveEndTime = 0 // Reset the wave end timer
+			} else {
+				game.waveEndTime += deltaTime
+			}
+		}
+		// Tower attacking logic
+		for i := range game.Towers {
+			tower := &game.Towers[i]
+			for j := 0; j < len(game.enemies); {
+				enemy := &game.enemies[j]
+				if tower.isEnemyInRange(enemy) {
+					enemy.Health -= int(tower.Damage)
+					if enemy.Health <= 0 {
+						// Update player's currency
+						game.Player.Currency += enemy.Currency
+
+						// Remove enemy from slice
+						game.enemies = append(game.enemies[:j], game.enemies[j+1:]...)
+						// Do not increment j, as we need to check the new enemy at index j
+					} else {
+						// Only increment j if we didn't remove an enemy
+						j++
+					}
+				} else {
+					// Increment j if enemy is not in range
+					j++
+				}
+			}
+		}
 	}
 
 	return nil
@@ -101,7 +176,7 @@ func (game *TowerDefenseGame) checkMouse() {
 		tileX, tileY := mouseX/game.Level.TileWidth, mouseY/game.Level.TileHeight
 
 		// Place a tower only if a tower is selected, the tower/upgrade window is closed, and the tile is valid
-		if !game.TowerManagementOpen && game.TowerToPlace != -1 && game.isTileValidForTower(tileX, tileY) {
+		if !game.TowerManagementOpen && game.TowerToPlace != None && game.isTileValidForTower(tileX, tileY) {
 			game.placeTower(tileX, tileY)
 			game.TowerToPlace = -1 // Reset the selected tower after placing it
 		}
@@ -109,8 +184,7 @@ func (game *TowerDefenseGame) checkMouse() {
 }
 
 func (game *TowerDefenseGame) isTileValidForTower(x, y int) bool {
-	// Implement logic to check if the tile at (x, y) is valid for placing a tower
-	// For example, you might want to check if the tile is not a path tile
+
 	return true // Placeholder implementation
 }
 
@@ -127,6 +201,7 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 	if game.TowerToPlace == -1 {
 		return // No tower selected, so don't place anything
 	}
+
 	// Calculate the center position of the tile
 	centerX := (x * game.Level.TileWidth) + (game.Level.TileWidth / 2) - (64 / 2)    // Center X - half width of the tower
 	centerY := (y * game.Level.TileHeight) + (game.Level.TileHeight / 2) - (192 / 2) // Center Y - half height of the tower
@@ -135,30 +210,85 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 		centerY -= 64 // Adjust centerY for Stone and Magic towers
 	}
 
-	var towerImages [3]*ebiten.Image
+	var newTower Tower
 	switch game.TowerToPlace {
 	case ArcherTower:
-		towerImages = game.archerTowerImages
+		if game.Player.Currency < 20 {
+			fmt.Println("Not enough currency to place Archer Tower")
+			return
+		}
+		newTower = Tower{
+			Type:     ArcherTower,
+			Level:    1,
+			Range:    100, // Example range, adjust as needed
+			Damage:   10,
+			Position: image.Point{X: centerX, Y: centerY},
+			Images:   game.archerTowerImages,
+			Cost:     20,
+		}
+		game.Player.Currency -= 20
+
 	case MagicTower:
-		towerImages = game.magicTowerImages
+		if game.Player.Currency < 40 {
+			fmt.Println("Not enough currency to place Lightning Tower")
+			return
+		}
+		newTower = Tower{
+			Type:     MagicTower,
+			Level:    1,
+			Range:    150, // Example range, adjust as needed
+			Damage:   15,
+			Position: image.Point{X: centerX, Y: centerY},
+			Images:   game.magicTowerImages,
+			Cost:     40,
+		}
+		game.Player.Currency -= 40
+
 	case IceTower:
-		towerImages = game.iceTowerImages
+		if game.Player.Currency < 60 {
+			fmt.Println("Not enough currency to place Ice Tower")
+			return
+		}
+		newTower = Tower{
+			Type:     IceTower,
+			Level:    1,
+			Range:    120, // Example range, adjust as needed
+			Damage:   10,
+			Position: image.Point{X: centerX, Y: centerY},
+			Images:   game.iceTowerImages,
+			Cost:     60,
+			Freeze:   5, // Freeze duration in seconds
+		}
+		game.Player.Currency -= 60
+
 	case StoneTower:
-		towerImages = game.stoneTowerImages
-	// Add cases for other tower types
+		if game.Player.Currency < 100 {
+			fmt.Println("Not enough currency to place Stone Tower")
+			return
+		}
+		newTower = Tower{
+			Type:     StoneTower,
+			Level:    1,
+			Range:    80, // Example range, adjust as needed
+			Damage:   25,
+			Position: image.Point{X: centerX, Y: centerY},
+			Images:   game.stoneTowerImages,
+			Cost:     100,
+		}
+		game.Player.Currency -= 100
+
 	default:
-		return // No tower selected or invalid type
+		fmt.Println("Unknown tower type")
+		return
 	}
 
-	newTower := Tower{
-		Type:     game.TowerToPlace,
-		Level:    1,
-		Range:    100, // Example values, adjust as needed
-		Damage:   10,
-		Position: image.Point{X: centerX, Y: centerY},
-		Images:   towerImages,
-	}
 	game.Towers = append(game.Towers, newTower)
+	fmt.Printf("Placed a %v tower at (%d, %d). Remaining currency: %d\n", game.TowerToPlace, x, y, game.Player.Currency)
+}
+
+func (t *Tower) isEnemyInRange(enemy *Enemy) bool {
+	distance := math.Sqrt(math.Pow(enemy.xloc-float64(t.Position.X), 2) + math.Pow(enemy.yloc-float64(t.Position.Y), 2))
+	return distance <= t.Range
 }
 
 func (game *TowerDefenseGame) drawTowerManagementButton(screen *ebiten.Image) {
@@ -262,10 +392,14 @@ func (game *TowerDefenseGame) Draw(screen *ebiten.Image) {
 	game.drawHeader(screen)
 	game.drawTowerManagementButton(screen)
 
-	if game.enemies.pict != nil {
-		drawOptions.GeoM.Reset()
-		drawOptions.GeoM.Translate(game.enemies.xloc, game.enemies.yloc)
-		screen.DrawImage(game.enemies.pict, &drawOptions)
+	for _, enemy := range game.enemies {
+		if enemy.pict != nil {
+			drawOptions.GeoM.Reset()
+			drawOptions.GeoM.Translate(enemy.xloc, enemy.yloc)
+			screen.DrawImage(enemy.pict, &drawOptions)
+		} else {
+			fmt.Println("Enemy picture is nil for enemy type:", enemy.Type)
+		}
 	}
 
 	if game.TowerManagementOpen {
@@ -324,21 +458,52 @@ func (game TowerDefenseGame) Layout(outsideWidth, outsideHeight int) (screenWidt
 	return outsideWidth, outsideHeight
 }
 
-func makeEnemies(game *TowerDefenseGame) Enemy {
-	picture, err := LoadEmbeddedImage("", "goblin.png")
+func makeEnemies(game *TowerDefenseGame, enemyType EnemyType) Enemy {
+	var picture *ebiten.Image
+	var err error
+	var strength, currency, health int
+
+	switch enemyType {
+	case Goblin:
+		picture, err = LoadEmbeddedImage("enemies/goblins", "goblin.png")
+		strength = 5
+		currency = 10
+		health = 10
+	case Knight:
+		picture, err = LoadEmbeddedImage("enemies/knights", "knight.png")
+		strength = 10
+		currency = 20
+		health = 20
+	case Wizard:
+		picture, err = LoadEmbeddedImage("enemies/wizards", "wizard.png")
+		strength = 15
+		currency = 30
+		health = 30
+	case Berserker:
+		picture, err = LoadEmbeddedImage("enemies/berserkers", "berserker.png")
+		strength = 20
+		currency = 40
+		health = 40
+
+	}
+
 	if err != nil {
 		log.Fatalf("Failed to load enemy image: %v", err)
 	}
+
 	xloc := float64(game.Level.TileWidth*game.Level.Width)/2 - 32
 	yloc := float64(game.Level.TileHeight*game.Level.Height) - float64(picture.Bounds().Dy())
-	character := Enemy{
+
+	return Enemy{
+		Type:        enemyType,
 		pict:        picture,
 		xloc:        xloc,
 		yloc:        yloc,
-		Strength:    5,
+		Strength:    strength,
+		Currency:    currency,
+		Health:      health,
 		attackTimer: 3,
 	}
-	return character
 }
 
 // Check if the enemy has reached the player tower
@@ -351,27 +516,25 @@ func (game *TowerDefenseGame) isEnemyAtPlayerTower() bool {
 	tileLeft := middleColumnX
 	tileRight := middleColumnX + game.Level.TileWidth
 
-	// Check if the enemy is within the horizontal range of the tile
-	enemyWithinHorizontalRange := game.enemies.xloc >= float64(tileLeft) && game.enemies.xloc+float64(game.enemies.pict.Bounds().Dx()) <= float64(tileRight)
-
-	// Check if the enemy has reached the y position of the tile
-	enemyReachedTileY := game.enemies.yloc <= float64(topRowY)
-
-	return enemyWithinHorizontalRange && enemyReachedTileY
+	for _, enemy := range game.enemies {
+		enemyWithinHorizontalRange := enemy.xloc >= float64(tileLeft) && enemy.xloc+float64(enemy.pict.Bounds().Dx()) <= float64(tileRight)
+		enemyReachedTileY := enemy.yloc <= float64(topRowY)
+		if enemyWithinHorizontalRange && enemyReachedTileY {
+			return true
+		}
+	}
+	return false
 }
 
 // Handle the enemy's attack on the player tower
-func (game *TowerDefenseGame) EnemyAttack(deltaTime float64) {
+func (game *TowerDefenseGame) EnemyAttack(deltaTime float64, enemy *Enemy) {
 
 	attackInterval := 1.0 // Example: 1 second between attacks
 
-	// Update the attack timer
-	game.enemies.attackTimer += deltaTime
-
-	// Check if it's time to attack
-	if game.enemies.attackTimer >= attackInterval {
-		game.Player.Health -= game.enemies.Strength
-		game.enemies.attackTimer = 0 // Reset the timer after an attack
+	enemy.attackTimer += deltaTime
+	if enemy.attackTimer >= attackInterval {
+		game.Player.Health -= enemy.Strength
+		enemy.attackTimer = 0 // Reset the timer after an attack
 
 		if game.Player.Health <= 0 {
 			// Handle the destruction of the player tower
@@ -382,7 +545,41 @@ func (game *TowerDefenseGame) EnemyAttack(deltaTime float64) {
 	}
 }
 
+func (game *TowerDefenseGame) startWave(waveNumber int) {
+	fmt.Println("Starting wave:", waveNumber)
+	game.currentWave = waveNumber
+	game.waveInProgress = true
+	game.waveEnemyIndex = 0
+	game.waveEnemies = []Enemy{} // Clear previous wave enemies
+
+	// Define the enemies for each wave
+	switch waveNumber {
+	case 1:
+		// Populate game.waveEnemies with 10 Goblins
+		for i := 0; i < 10; i++ {
+			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Goblin))
+		}
+	case 2:
+		// Populate game.waveEnemies with 8 Knights
+		for i := 0; i < 8; i++ {
+			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Knight))
+		}
+	case 3:
+		// Populate game.waveEnemies with 6 Wizards
+		for i := 0; i < 6; i++ {
+			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Wizard))
+		}
+	case 4:
+		// Populate game.waveEnemies with 5 Berserkers
+		for i := 0; i < 5; i++ {
+			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Berserker))
+		}
+		// Add cases for other waves if needed
+	}
+}
+
 func main() {
+	fmt.Println("Main function started")
 	gameMap := loadMapFromEmbedded(path.Join("assets", "MapForPaths.tmx"))
 	pathMap := makeSearchMap(gameMap)
 	searchablePathMap := paths.NewGridFromStringArrays(pathMap, gameMap.TileWidth, gameMap.TileHeight)
@@ -413,7 +610,9 @@ func main() {
 	placePlayerTowers(&oneLevelGame)
 
 	// Load enemies onto the map
-	oneLevelGame.enemies = makeEnemies(&oneLevelGame)
+	oneLevelGame.enemies = []Enemy{}
+
+	oneLevelGame.startWave(1)
 
 	// Run the game
 	err := ebiten.RunGame(&oneLevelGame)
@@ -491,7 +690,7 @@ func placePlayerTowers(game *TowerDefenseGame) {
 func loadMapFromEmbedded(name string) *tiled.Map {
 	embeddedMap, err := tiled.LoadFile(name, tiled.WithFileSystem(embeddedFiles))
 	if err != nil {
-		fmt.Println("Error loading embedded map:", err)
+		log.Fatalf("Error loading embedded map: %v", err)
 	}
 	return embeddedMap
 }
@@ -531,9 +730,17 @@ func LoadEmbeddedImage(folderName string, imageName string) (*ebiten.Image, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to load embedded image %s: %w", imageName, err)
 	}
-	ebitenImage, _, err := ebitenutil.NewImageFromReader(embeddedFile)
+	defer func(embeddedFile fs.File) {
+		err := embeddedFile.Close()
+		if err != nil {
+
+		}
+	}(embeddedFile)
+
+	img, _, err := ebitenutil.NewImageFromReader(embeddedFile)
 	if err != nil {
-		return nil, fmt.Errorf("error loading tile image %s: %w", imageName, err)
+		return nil, fmt.Errorf("failed to create image from embedded file %s: %w", imageName, err)
 	}
-	return ebitenImage, nil
+
+	return img, nil
 }
