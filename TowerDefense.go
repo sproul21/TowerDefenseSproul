@@ -45,7 +45,7 @@ type Tower struct {
 	Cost     int
 	Freeze   float64
 	Position image.Point
-	Images   [3]*ebiten.Image // Images for each level
+	Images   [3]*ebiten.Image
 }
 
 type Player struct {
@@ -102,7 +102,7 @@ type Enemy struct {
 
 func (game *TowerDefenseGame) Update() error {
 	currentTime := time.Now()
-	deltaTime := currentTime.Sub(game.lastUpdateTime).Seconds() // deltaTime in seconds
+	deltaTime := currentTime.Sub(game.lastUpdateTime).Seconds()
 	game.lastUpdateTime = currentTime
 
 	game.checkMouse()
@@ -111,7 +111,7 @@ func (game *TowerDefenseGame) Update() error {
 	for i := range game.enemies {
 		fmt.Println("Updating enemy position:", game.enemies[i].xloc, game.enemies[i].yloc)
 		if game.enemies[i].yloc > float64(60) {
-			game.enemies[i].yloc -= .5 // Adjust this value to control the speed of the enemy
+			game.enemies[i].yloc -= .5
 		} else {
 			game.EnemyAttack(deltaTime, &game.enemies[i])
 		}
@@ -132,15 +132,15 @@ func (game *TowerDefenseGame) Update() error {
 			}
 		} else {
 			// All enemies in the wave have been spawned
-			if game.waveEndTime >= 15 { // 10 seconds after the wave ends
+			if game.waveEndTime >= 15 {
 				// Start the next wave
 				game.startWave(game.currentWave + 1)
-				game.waveEndTime = 0 // Reset the wave end timer
+				game.waveEndTime = 0
 			} else {
 				game.waveEndTime += deltaTime
 			}
 		}
-		// Tower attacking logic
+
 		for i := range game.Towers {
 			tower := &game.Towers[i]
 			for j := 0; j < len(game.enemies); {
@@ -153,13 +153,13 @@ func (game *TowerDefenseGame) Update() error {
 
 						// Remove enemy from slice
 						game.enemies = append(game.enemies[:j], game.enemies[j+1:]...)
-						// Do not increment j, as we need to check the new enemy at index j
+
 					} else {
-						// Only increment j if we didn't remove an enemy
+
 						j++
 					}
 				} else {
-					// Increment j if enemy is not in range
+
 					j++
 				}
 			}
@@ -203,8 +203,8 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 	}
 
 	// Calculate the center position of the tile
-	centerX := (x * game.Level.TileWidth) + (game.Level.TileWidth / 2) - (64 / 2)    // Center X - half width of the tower
-	centerY := (y * game.Level.TileHeight) + (game.Level.TileHeight / 2) - (192 / 2) // Center Y - half height of the tower
+	centerX := (x * game.Level.TileWidth) + (game.Level.TileWidth / 2) - (64 / 2)
+	centerY := (y * game.Level.TileHeight) + (game.Level.TileHeight / 2) - (192 / 2)
 
 	if game.TowerToPlace == StoneTower || game.TowerToPlace == MagicTower {
 		centerY -= 64 // Adjust centerY for Stone and Magic towers
@@ -220,7 +220,7 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 		newTower = Tower{
 			Type:     ArcherTower,
 			Level:    1,
-			Range:    100, // Example range, adjust as needed
+			Range:    100,
 			Damage:   10,
 			Position: image.Point{X: centerX, Y: centerY},
 			Images:   game.archerTowerImages,
@@ -236,7 +236,7 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 		newTower = Tower{
 			Type:     MagicTower,
 			Level:    1,
-			Range:    150, // Example range, adjust as needed
+			Range:    150,
 			Damage:   15,
 			Position: image.Point{X: centerX, Y: centerY},
 			Images:   game.magicTowerImages,
@@ -252,12 +252,12 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 		newTower = Tower{
 			Type:     IceTower,
 			Level:    1,
-			Range:    120, // Example range, adjust as needed
+			Range:    120,
 			Damage:   10,
 			Position: image.Point{X: centerX, Y: centerY},
 			Images:   game.iceTowerImages,
 			Cost:     60,
-			Freeze:   5, // Freeze duration in seconds
+			Freeze:   5,
 		}
 		game.Player.Currency -= 60
 
@@ -269,7 +269,7 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 		newTower = Tower{
 			Type:     StoneTower,
 			Level:    1,
-			Range:    80, // Example range, adjust as needed
+			Range:    80,
 			Damage:   25,
 			Position: image.Point{X: centerX, Y: centerY},
 			Images:   game.stoneTowerImages,
@@ -283,7 +283,7 @@ func (game *TowerDefenseGame) placeTower(x, y int) {
 	}
 
 	game.Towers = append(game.Towers, newTower)
-	fmt.Printf("Placed a %v tower at (%d, %d). Remaining currency: %d\n", game.TowerToPlace, x, y, game.Player.Currency)
+
 }
 
 func (t *Tower) isEnemyInRange(enemy *Enemy) bool {
@@ -293,7 +293,7 @@ func (t *Tower) isEnemyInRange(enemy *Enemy) bool {
 
 func (game *TowerDefenseGame) drawTowerManagementButton(screen *ebiten.Image) {
 
-	buttonX, buttonY, buttonWidth, buttonHeight := 10, 10, 64, 64 // Adjust as needed
+	buttonX, buttonY, buttonWidth, buttonHeight := 10, 10, 64, 64
 
 	// Draw button background
 	ebitenutil.DrawRect(screen, float64(buttonX), float64(buttonY), float64(buttonWidth), float64(buttonHeight), color.Black)
@@ -313,7 +313,7 @@ func (game *TowerDefenseGame) drawTowerManagementButton(screen *ebiten.Image) {
 }
 
 const (
-	buttonSize = 40 // Size of the button
+	buttonSize = 40
 )
 
 func (game *TowerDefenseGame) drawTowerManagementWindow(screen *ebiten.Image) {
@@ -331,7 +331,7 @@ func (game *TowerDefenseGame) drawTowerManagementWindow(screen *ebiten.Image) {
 	titleY := windowY + 10
 	ebitenutil.DebugPrintAt(screen, title, titleX, titleY)
 
-	// Draw buttons or icons for each tower type
+	// Draw icons for each tower type
 	towerTypes := []TowerType{ArcherTower, MagicTower, StoneTower, IceTower}
 	for i, towerType := range towerTypes {
 		x := windowX + 64 + i*(buttonSize+64) // Adjust position as needed
@@ -341,7 +341,7 @@ func (game *TowerDefenseGame) drawTowerManagementWindow(screen *ebiten.Image) {
 			y -= 64
 		}
 
-		// Draw button background or tower image
+		// Draw tower image
 		var towerImage *ebiten.Image
 		switch towerType {
 		case ArcherTower:
@@ -361,7 +361,6 @@ func (game *TowerDefenseGame) drawTowerManagementWindow(screen *ebiten.Image) {
 		}
 	}
 
-	// Handle button clicks outside the drawing loop
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mouseX, mouseY := ebiten.CursorPosition()
 		for i, towerType := range towerTypes {
@@ -438,16 +437,13 @@ func (game *TowerDefenseGame) drawHeader(screen *ebiten.Image) {
 	bounds := text.BoundString(face, headerText)
 	textWidth := bounds.Max.X - bounds.Min.X
 	x := 400 - textWidth
-	y := 40 // Adjust as needed
+	y := 40
 
-	// Draw a semi-transparent rectangle as the background
 	bg := image.Rect(x-10, y-24, x+textWidth+10, y+10)
 	ebitenutil.DrawRect(screen, float64(bg.Min.X), float64(bg.Min.Y), float64(bg.Dx()), float64(bg.Dy()), color.RGBA{0, 0, 0, 128})
 
-	// Draw the text
 	text.Draw(screen, headerText, face, x, y, color.White)
 
-	// Release the font face
 	err = face.Close()
 	if err != nil {
 		return
@@ -508,9 +504,9 @@ func makeEnemies(game *TowerDefenseGame, enemyType EnemyType) Enemy {
 
 // Check if the enemy has reached the player tower
 func (game *TowerDefenseGame) isEnemyAtPlayerTower() bool {
-	// Calculate the position of the tile in the first row and middle column
-	middleColumnX := game.Level.TileWidth * 7 // 7th column in zero-based indexing
-	topRowY := 0 + 64                         // Top row
+
+	middleColumnX := game.Level.TileWidth * 7
+	topRowY := 0 + 64
 
 	// Calculate the horizontal range of the tile
 	tileLeft := middleColumnX
@@ -529,17 +525,15 @@ func (game *TowerDefenseGame) isEnemyAtPlayerTower() bool {
 // Handle the enemy's attack on the player tower
 func (game *TowerDefenseGame) EnemyAttack(deltaTime float64, enemy *Enemy) {
 
-	attackInterval := 1.0 // Example: 1 second between attacks
+	attackInterval := 1.0
 
 	enemy.attackTimer += deltaTime
 	if enemy.attackTimer >= attackInterval {
 		game.Player.Health -= enemy.Strength
-		enemy.attackTimer = 0 // Reset the timer after an attack
+		enemy.attackTimer = 0
 
 		if game.Player.Health <= 0 {
-			// Handle the destruction of the player tower
-			// For example, end the game or reduce player's health
-			// Implement your logic here
+			// Placeholder for future logic
 		}
 
 	}
@@ -550,31 +544,31 @@ func (game *TowerDefenseGame) startWave(waveNumber int) {
 	game.currentWave = waveNumber
 	game.waveInProgress = true
 	game.waveEnemyIndex = 0
-	game.waveEnemies = []Enemy{} // Clear previous wave enemies
+	game.waveEnemies = []Enemy{}
 
 	// Define the enemies for each wave
 	switch waveNumber {
 	case 1:
-		// Populate game.waveEnemies with 10 Goblins
+
 		for i := 0; i < 10; i++ {
 			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Goblin))
 		}
 	case 2:
-		// Populate game.waveEnemies with 8 Knights
+
 		for i := 0; i < 8; i++ {
 			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Knight))
 		}
 	case 3:
-		// Populate game.waveEnemies with 6 Wizards
+
 		for i := 0; i < 6; i++ {
 			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Wizard))
 		}
 	case 4:
-		// Populate game.waveEnemies with 5 Berserkers
+
 		for i := 0; i < 5; i++ {
 			game.waveEnemies = append(game.waveEnemies, makeEnemies(game, Berserker))
 		}
-		// Add cases for other waves if needed
+
 	}
 }
 
@@ -603,13 +597,10 @@ func main() {
 		pathMap: searchablePathMap,
 	}
 
-	// Load all tower images including the player tower
 	loadTowerImages(&oneLevelGame)
 
-	// Place the player towers at the specified locations
 	placePlayerTowers(&oneLevelGame)
 
-	// Load enemies onto the map
 	oneLevelGame.enemies = []Enemy{}
 
 	oneLevelGame.startWave(1)
@@ -662,7 +653,6 @@ func loadTowerImageSet(folderName string) ([3]*ebiten.Image, error) {
 		return images, err
 	}
 
-	// Each tower level image is 64x192 pixels
 	for i := 0; i < 3; i++ {
 		subImage := fullImage.SubImage(image.Rect(i*64, 0, (i+1)*64, 192)).(*ebiten.Image)
 		images[i] = subImage
@@ -672,10 +662,9 @@ func loadTowerImageSet(folderName string) ([3]*ebiten.Image, error) {
 }
 
 func placePlayerTowers(game *TowerDefenseGame) {
-	// Calculate centerX as the horizontal center of the map minus half the width of the tower
+	
 	centerX := (game.Level.TileWidth * game.Level.Width / 2) - (64 / 2)
 
-	// centerY is set to the top of the map minus half the height of the tower
 	centerY := (game.Level.TileHeight / 2) - (192 / 2)
 
 	game.Towers = append(game.Towers, Tower{
